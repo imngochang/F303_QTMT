@@ -100,8 +100,9 @@ void Sim_resetSIM(void);
 void Sim_restartControl(void);
 void Sim_sendMess(char* phonenumber, char* content);
 bool RTC_initAlarm(uint8_t hours, uint8_t minutes, uint8_t seconds);
-void RTC_saveDateTime(void);
-void RTC_readDateTime(void);
+void RTC_updateUserTime(void);
+void RTC_updateUserDate(RTC_DateTypeDef* datetime);
+bool RTC_isLeapYear(uint16_t y);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -119,14 +120,13 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 	//Thuc hien lay thoi gian hien tai cua RTC
 	HAL_RTC_GetTime(hrtc, &currentTime, RTC_FORMAT_BIN);
 	HAL_RTC_GetDate(hrtc, &currentDate, RTC_FORMAT_BIN);
-	//Thuc hien cai dat thoi gian Alarm
-	RTC_initAlarm(currentTime.Hours, currentTime.Minutes, 0);
 	rtc_count++;
 	if((userAlarm.AlarmTime.Hours == 0) && (userAlarm.AlarmTime.Minutes == 0))
 	{
-		RTC_saveDateTime();
 		isRTCStartCounting = true;
 	}
+	//Thuc hien cai dat thoi gian Alarm
+	RTC_initAlarm(currentTime.Hours, currentTime.Minutes, 0);
 	HAL_RTC_SetAlarm_IT(hrtc, &userAlarm, RTC_FORMAT_BIN);
 }
 /* USER CODE END 0 */
@@ -164,7 +164,6 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   	HAL_Delay(1000);
-  	RTC_readDateTime();
     HAL_UART_Receive_IT(&SIM_UART, Sim_Rxbyte, 1);
     Sim_resetSIM();
     /* First Connection */
@@ -213,12 +212,12 @@ int main(void)
 
 	  if(isRTCStartCounting)
 	  {
-		  HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
-		  HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
-		  if((currentTime.Hours == 0)&&(currentTime.Minutes > 4))
-		  {
-			  NVIC_SystemReset();
-		  }
+//		  HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
+//		  HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
+//		  if((currentTime.Hours == 0)&&(currentTime.Minutes > 4))
+//		  {
+//			  NVIC_SystemReset();
+//		  }
 	  }
     /* USER CODE END WHILE */
 
@@ -244,10 +243,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -257,7 +256,7 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
@@ -317,9 +316,9 @@ static void MX_RTC_Init(void)
 
   /** Initialize RTC and set the Time and Date
   */
-  sTime.Hours = 9;
-  sTime.Minutes = 0;
-  sTime.Seconds = 0;
+  sTime.Hours = 23;
+  sTime.Minutes = 59;
+  sTime.Seconds = 50;
   sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sTime.StoreOperation = RTC_STOREOPERATION_RESET;
   if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
@@ -327,8 +326,8 @@ static void MX_RTC_Init(void)
     Error_Handler();
   }
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 10;
+  sDate.Month = RTC_MONTH_DECEMBER;
+  sDate.Date = 31;
   sDate.Year = 21;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
@@ -337,9 +336,9 @@ static void MX_RTC_Init(void)
   }
   /** Enable the Alarm A
   */
-  sAlarm.AlarmTime.Hours = 9;
-  sAlarm.AlarmTime.Minutes = 0;
-  sAlarm.AlarmTime.Seconds = 10;
+  sAlarm.AlarmTime.Hours = 23;
+  sAlarm.AlarmTime.Minutes = 59;
+  sAlarm.AlarmTime.Seconds = 55;
   sAlarm.AlarmTime.SubSeconds = 0;
   sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
@@ -492,7 +491,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : SIM_RI_Pin */
   GPIO_InitStruct.Pin = SIM_RI_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SIM_RI_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : RS485_EN_Pin */
@@ -550,8 +549,9 @@ STATUS Sim_connectHTTP(char* host, char* url, char* sentdata, char* recvdata)
 								{
 									RTC_ALARM = rtc_alarm;
 //									Flash_WriteIntType(MODE_RTC_ADDR, RTC_ALARM);
-//									HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-//									RTC_initAlarm(sTime.Hours, sTime.Minutes, 0);
+									HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
+									HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
+									RTC_initAlarm(currentTime.Hours, currentTime.Minutes, 0);
 								}
 							}
 						}
@@ -606,8 +606,8 @@ void Sim_extractTimeStamp(char* data)
 		TimeStamp.min = atoi(tok);
 		tok = strtok(NULL,":");
 		TimeStamp.sec = atoi(tok);
-//		//update RTC Time
-//		RTC_UserTimeUpdate();
+		//update RTC Time
+		RTC_updateUserTime();
 	}
 }
 
@@ -830,26 +830,139 @@ bool RTC_initAlarm(uint8_t hours, uint8_t minutes, uint8_t seconds)
 	return true;
 }
 
-void RTC_saveDateTime(void)
+void RTC_updateUserTime(void)
 {
-	HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
-	uint32_t dateToStore;
-	memcpy(&dateToStore, &currentDate, 4);
-	HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR2,(dateToStore >> 16));
-	HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3,(dateToStore & 0xffff));
+	bool isCorrectTime = false;
+	RTC_TimeTypeDef m_Time = currentTime;
+	RTC_DateTypeDef m_Date = currentDate;
+	TimeStamp.year -= 2000;
+	TimeStamp.hour += 7;
+	if(TimeStamp.year < 99)
+	{
+		if((TimeStamp.mon > 0) && (TimeStamp.mon < 13))
+		{
+			if((TimeStamp.date > 0) && (TimeStamp.date < 32))
+			{
+				if((TimeStamp.hour > 6) && (TimeStamp.hour < 31)) //7->30
+				{
+					if(TimeStamp.min < 60)
+					{
+						if(TimeStamp.sec < 60)
+						{
+							isCorrectTime = true;
+						}
+					}
+				}
+			}
+		}
+	}
+	if(isCorrectTime)
+	{
+		//cap nhat ngay thang cho DateToUpdate
+		m_Date.Date = TimeStamp.date;
+		m_Date.Month = TimeStamp.mon;
+		m_Date.Year = TimeStamp.year;
+		if(TimeStamp.hour > 23)
+		{
+			TimeStamp.hour = TimeStamp.hour - 24;
+			RTC_updateUserDate(&m_Date);
+		}
+		else
+		{
+			HAL_RTC_SetDate(&hrtc, &m_Date, RTC_FORMAT_BIN);
+		}
+		m_Time.Hours = TimeStamp.hour;
+		m_Time.Minutes = TimeStamp.min;
+		m_Time.Seconds = TimeStamp.sec;
+		HAL_RTC_SetTime(&hrtc, &m_Time, RTC_FORMAT_BIN);
+		HAL_RTC_SetDate(&hrtc, &m_Date, RTC_FORMAT_BIN);
+		RTC_initAlarm(m_Time.Hours, m_Time.Minutes, 0);
+	}
 }
 
-void RTC_readDateTime(void)
+void RTC_updateUserDate(RTC_DateTypeDef* datetime)
 {
-	uint32_t dateToRead;
-	RTC_DateTypeDef tempDate = {0};
-	dateToRead  = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR3);
-	dateToRead |= HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2) << 16;
-	memcpy(&tempDate, &dateToRead, sizeof(uint32_t));
-	HAL_RTC_SetDate(&hrtc, &tempDate, RTC_FORMAT_BIN);
-	HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
+	if ((datetime->Month == 1U) || (datetime->Month == 3U) || (datetime->Month == 5U) || (datetime->Month == 7U) || \
+        (datetime->Month == 8U) || (datetime->Month == 10U) || (datetime->Month == 12U))
+	{
+		if (datetime->Date < 31U)
+		{
+			datetime->Date++;
+		}
+		/* Date structure member: day = 31 */
+		else
+		{
+			if (datetime->Month != 12U)
+			{
+				datetime->Month++;
+				datetime->Date = 1U;
+			}
+			/* Date structure member: day = 31 & month =12 */
+			else
+			{
+				datetime->Month = 1U;
+				datetime->Date = 1U;
+				datetime->Year++;
+			}
+		}
+	}
+	else if ((datetime->Month == 4U) || (datetime->Month == 6U) || (datetime->Month == 9U) || (datetime->Month == 11U))
+	{
+		if (datetime->Date < 30U)
+		{
+			datetime->Date++;
+		}
+		/* Date structure member: day = 30 */
+		else
+		{
+			datetime->Month++;
+			datetime->Date = 1U;
+		}
+	}
+	else if (datetime->Month == 2U)
+	{
+		if (datetime->Date < 28U)
+		{
+			datetime->Date++;
+		}
+		else if (datetime->Date == 28U)
+		{
+			/* Leap year */
+			if (RTC_isLeapYear(datetime->Year))
+			{
+				datetime->Date++;
+			}
+			else
+			{
+				datetime->Month++;
+				datetime->Date = 1U;
+			}
+		}
+		else if (datetime->Date == 29U)
+		{
+			datetime->Month++;
+			datetime->Date = 1U;
+		}
+	}
+	HAL_RTC_SetDate(&hrtc, datetime, RTC_FORMAT_BIN);
 }
 
+bool RTC_isLeapYear(uint16_t y)
+{
+  if((y + 2000) % 4 != 0)
+  {
+    return false;
+  }
+  else if((y + 2000) % 100 != 0)
+  {
+    return true;
+  }
+  else if((y + 2000) % 400 != 0)
+  {
+    return false;
+  }
+  else return true;
+}
 
 /* USER CODE END 4 */
 
