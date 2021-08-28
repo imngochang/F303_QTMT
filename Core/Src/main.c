@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "HTTPClient_STM32.h"
+#include "FLASH_STM32.h"
 #include "stdbool.h"
 /* USER CODE END Includes */
 
@@ -36,6 +37,14 @@
 
 /* User define */
 #define STATION 			30
+#define MIN_DATA_ADDR 		0x08011400 //Page 69
+#define MAX_DATA_ADDR 		0x0801F800 //Page 126
+#define MAX_PAGE_ADDR		0x0801FBF0 //End of page 126
+#define MIN_PAGE_ADDR		0x080117F0 //End of page 69
+#define RD_ADDR				0x08011000 //Page 68
+#define WR_ADDR				0x08010C00 //Page 67
+#define PG_ADDR				0x08010800 //Page 66
+#define MODE_RTC_ADDR 		0x08010400 //Page 65
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -63,11 +72,14 @@ char URL1[30]      = "update.php";
 char Host1[30]     = "kttvttb.tapit.vn";
 char URL2[30]      = "update.php";
 char Host2[30]     = "kttvttb.tapit.vn";
+char HostConfig[30]     = "kttvttb.tapit.vn";
+char URLConfig[30]      = "status.php";
 /*=========RTC===========*/
 RTC_TimeTypeDef currentTime = {0};
 RTC_DateTypeDef currentDate = {0};
 RTC_AlarmTypeDef userAlarm = {0};
 volatile bool isRTCStartCounting = false;
+volatile bool isOnTimeToSendReq = false;
 uint8_t RTC_ALARM = 5;
 char* Months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 struct timestamp
@@ -82,6 +94,17 @@ struct timestamp
 } TimeStamp;
 
 volatile uint16_t rtc_count = 0;
+/*========FLASH==========*/
+uint32_t WRITE_DATA_ADDR = MIN_DATA_ADDR;
+uint32_t READ_DATA_ADDR = MIN_DATA_ADDR;
+uint32_t PAGE_ADDR = MAX_PAGE_ADDR;
+char Flash_DataToWrite[200] = {0};
+char Flash_DataToRead[200] = {0};
+char Flash_Host[50],Flash_URL[50],Flash_Data[200] = {0};
+uint16_t Flash_WriteDataLen, Flash_ReadDataLen = 0;
+bool Flash_isReadData = false;
+/*=======SENSOR==========*/
+char MainData[200] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -103,6 +126,9 @@ bool RTC_initAlarm(uint8_t hours, uint8_t minutes, uint8_t seconds);
 void RTC_updateUserTime(void);
 void RTC_updateUserDate(RTC_DateTypeDef* datetime);
 bool RTC_isLeapYear(uint16_t y);
+void Flash_init(void);
+void Flash_writeData(const char* host, const char* url, const char* data);
+void Flash_extractData(char* data);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -117,6 +143,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
+	isOnTimeToSendReq = true;
 	//Thuc hien lay thoi gian hien tai cua RTC
 	HAL_RTC_GetTime(hrtc, &currentTime, RTC_FORMAT_BIN);
 	HAL_RTC_GetDate(hrtc, &currentDate, RTC_FORMAT_BIN);
@@ -164,6 +191,7 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   	HAL_Delay(1000);
+  	Flash_init();
     HAL_UART_Receive_IT(&SIM_UART, Sim_Rxbyte, 1);
     Sim_resetSIM();
     /* First Connection */
@@ -184,7 +212,7 @@ int main(void)
 				if(HTTP_configParams() == RET_OK)
 				{
 					__NOP();
-					Sim_connectHTTP(Host1, "status.php", StationStart, (char*)HTTP_DataToGet);
+					Sim_connectHTTP(HostConfig, URLConfig, StationStart, (char*)HTTP_DataToGet);
 				}
 			}
 		}
@@ -206,19 +234,96 @@ int main(void)
 
 	  if(configStatus == 1)
 	  {
-//	  	Sim_connectHTTP(StationStart, HostConfig, URLConfig, PortConfig);
-	  	configStatus = 0;
+		  Sim_connectHTTP(HostConfig, URLConfig, StationConfig, (char*)HTTP_DataToGet);
+		  configStatus = 0;
 	  }
 
 	  if(isRTCStartCounting)
 	  {
-//		  HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
-//		  HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
-//		  if((currentTime.Hours == 0)&&(currentTime.Minutes > 4))
-//		  {
-//			  NVIC_SystemReset();
-//		  }
+		  HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
+		  HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
+		  if((currentTime.Hours == 0)&&(currentTime.Minutes > 4))
+		  {
+			  NVIC_SystemReset();
+		  }
 	  }
+
+	  if(isOnTimeToSendReq)
+	  {
+		  Sim_exitSLEEPMode();
+		  //Kiem tra tin hieu Sim
+		  Sim_RSSI = Sim_getSignalQuality();
+		  //Tong hop du lieu
+		  strcpy(MainData,"TEST DATA");
+		  //Gui du lieu len Server
+		  ret = Sim_connectHTTP(Host1, URL1, MainData, (char*)HTTP_DataToGet);
+		  if(ret != RET_OK)
+		  {
+			  Flash_writeData(Host1, NULL, MainData);
+			  Flash_isReadData = false;
+		  }
+		  else
+		  {
+			  Flash_isReadData = true;
+		  }
+		  //Reset du lieu
+		  memset(MainData,0,strlen(MainData));
+		  Sim_enterSLEEPMode();
+		  isOnTimeToSendReq = false;
+	  }
+	  else
+	  {
+		  if(Flash_isReadData == true)
+		  {
+			  if(READ_DATA_ADDR != WRITE_DATA_ADDR)
+			  {
+				  memset(Flash_DataToRead, 0, strlen(Flash_DataToRead));
+				  READ_DATA_ADDR = Flash_ReadIntType(RD_ADDR);
+				  WRITE_DATA_ADDR = Flash_ReadIntType(WR_ADDR);
+				  PAGE_ADDR = Flash_ReadIntType(PG_ADDR);
+				  Flash_ReadCharType(Flash_DataToRead, READ_DATA_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+				  Flash_ReadDataLen = strlen(Flash_DataToRead);
+				  if(Flash_ReadDataLen != 0)
+				  {
+					  Flash_extractData(Flash_DataToRead);
+				  }
+				  ret = Sim_connectHTTP(Flash_Host, Flash_URL, Flash_Data, (char*)HTTP_DataToGet);
+				  if(ret == RET_OK)
+				  {
+					  READ_DATA_ADDR += Flash_ReadDataLen*2+2;
+					  if(READ_DATA_ADDR == MAX_PAGE_ADDR)
+					  {
+						  READ_DATA_ADDR = MIN_DATA_ADDR;
+					  }
+					  Flash_Unlock();
+					  Flash_Erase(RD_ADDR);
+					  Flash_WriteIntType(RD_ADDR, READ_DATA_ADDR,FLASH_TYPEPROGRAM_WORD);
+					  Flash_WriteIntType(WR_ADDR, WRITE_DATA_ADDR,FLASH_TYPEPROGRAM_WORD);
+					  Flash_WriteIntType(PG_ADDR,PAGE_ADDR,FLASH_TYPEPROGRAM_WORD);
+					  Flash_Lock();
+				  }
+				  else //gui that bai -> khong cho phep doc bo nho Flash
+				  {
+					  Flash_isReadData = false;
+				  }
+			  }
+			  else //gui het du lieu Flash -> dua ve Sleepmode
+			  {
+				  if(Sim_SleepMode == false)
+				  {
+					  Sim_enterSLEEPMode();
+				  }
+			  }
+		  }
+		  else //khong cho phep doc du lieu Flash -> dua ve Sleepmode
+		  {
+			  if(Sim_SleepMode == false)
+			  {
+				  Sim_enterSLEEPMode();
+			  }
+		  }
+	  }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -548,7 +653,7 @@ STATUS Sim_connectHTTP(char* host, char* url, char* sentdata, char* recvdata)
 								if(rtc_alarm != RTC_ALARM)
 								{
 									RTC_ALARM = rtc_alarm;
-//									Flash_WriteIntType(MODE_RTC_ADDR, RTC_ALARM);
+									Flash_WriteIntType(MODE_RTC_ADDR, RTC_ALARM, FLASH_TYPEPROGRAM_HALFWORD);
 									HAL_RTC_GetTime(&hrtc, &currentTime, RTC_FORMAT_BIN);
 									HAL_RTC_GetDate(&hrtc, &currentDate, RTC_FORMAT_BIN);
 									RTC_initAlarm(currentTime.Hours, currentTime.Minutes, 0);
@@ -962,6 +1067,116 @@ bool RTC_isLeapYear(uint16_t y)
     return false;
   }
   else return true;
+}
+
+void Flash_init(void)
+{
+	/* Flash init */
+	if(Flash_ReadIntType(WR_ADDR) == 0xFFFFFFFF)
+	{
+		Flash_WriteIntType(WR_ADDR, WRITE_DATA_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+	}
+	if(Flash_ReadIntType(RD_ADDR) == 0xFFFFFFFF)
+	{
+		Flash_WriteIntType(RD_ADDR, READ_DATA_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+	}
+	if(Flash_ReadIntType(PG_ADDR) == 0xFFFFFFFF)
+	{
+		Flash_WriteIntType(PG_ADDR, PAGE_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+	}
+	WRITE_DATA_ADDR = Flash_ReadIntType(WR_ADDR);
+	READ_DATA_ADDR = Flash_ReadIntType(RD_ADDR);
+	PAGE_ADDR = Flash_ReadIntType(PG_ADDR);
+	if(Flash_ReadIntType(MODE_RTC_ADDR) == 0xFFFFFFFF)
+	{
+		Flash_WriteIntType(MODE_RTC_ADDR, RTC_ALARM, FLASH_TYPEPROGRAM_HALFWORD);
+	}
+	RTC_ALARM = Flash_ReadIntType(MODE_RTC_ADDR);
+	RTC_initAlarm(userAlarm.AlarmTime.Hours,userAlarm.AlarmTime.Minutes,0);
+}
+
+void Flash_writeData(const char* host, const char* url, const char* data)
+{
+	memset(Flash_DataToWrite,0,strlen(Flash_DataToWrite));
+	if((host != NULL) && (url != NULL))
+	{
+		sprintf(Flash_DataToWrite,"%s|%s|%s",host,url,data);
+	}
+	else
+	{
+		if(strstr(host,Host1) != NULL)
+		{
+			sprintf(Flash_DataToWrite,"%s||1",data);
+		}
+		else
+		{
+			sprintf(Flash_DataToWrite,"%s||2",data);
+		}
+	}
+	Flash_Unlock();
+	Flash_WriteDataLen = strlen(Flash_DataToWrite);
+	if((WRITE_DATA_ADDR + Flash_WriteDataLen*2) >= PAGE_ADDR)
+	{
+		if(PAGE_ADDR == MAX_PAGE_ADDR)
+		{
+			PAGE_ADDR = MIN_PAGE_ADDR;
+			WRITE_DATA_ADDR = MIN_DATA_ADDR;
+			Flash_Erase(WRITE_DATA_ADDR);
+		}
+		else
+		{
+			PAGE_ADDR += 0x800;
+		}
+		if(READ_DATA_ADDR > WRITE_DATA_ADDR)
+		{
+			READ_DATA_ADDR = PAGE_ADDR + 0x10 - 0x800;
+		}
+		Flash_Unlock();
+		Flash_Erase(PAGE_ADDR);
+	}
+	Flash_WriteCharType(WRITE_DATA_ADDR, Flash_DataToWrite, FLASH_TYPEPROGRAM_HALFWORD);
+	WRITE_DATA_ADDR += Flash_WriteDataLen*2+2;
+	Flash_Erase(WR_ADDR);
+	//Luu PAGE_ADDR, WRITE_DATA_ADDR, READ_DATA_ADDR vao bo nho Flash
+	Flash_WriteIntType(RD_ADDR, READ_DATA_ADDR, FLASH_TYPEPROGRAM_WORD);
+	Flash_WriteIntType(WR_ADDR, WRITE_DATA_ADDR, FLASH_TYPEPROGRAM_WORD);
+	Flash_WriteIntType(PG_ADDR, PAGE_ADDR, FLASH_TYPEPROGRAM_WORD);
+	Flash_Lock();
+}
+
+void Flash_extractData(char* data)
+{
+	memset(Flash_Host,0,strlen(Flash_Host));
+	memset(Flash_URL,0,strlen(Flash_URL));
+	memset(Flash_Data,0,strlen(Flash_Data));
+	if(strstr(data,"||") == NULL)
+	{
+		char* token;
+		token = strtok(data,"|");
+		strcpy(Flash_Host,token);
+		token = strtok(NULL,"|");
+		strcpy(Flash_URL,token);
+		token = strtok(NULL,"|");
+		strcpy(Flash_Data,token);
+	}
+	else
+	{
+		char* token;
+		token = strtok(data,"|");
+		strcpy(Flash_Data,token);
+		token = strtok(NULL,"|");
+		token = strtok(NULL,"|");
+		if(atoi(token) == 1)
+		{
+			strcpy(Flash_Host,Host1);
+			strcpy(Flash_URL,URL1);
+		}
+		else
+		{
+			strcpy(Flash_Host,Host2);
+			strcpy(Flash_URL,URL2);
+		}
+	}
 }
 
 /* USER CODE END 4 */

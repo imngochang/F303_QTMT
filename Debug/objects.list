@@ -1,3 +1,4 @@
+"Core/Src/FLASH_STM32.o"
 "Core/Src/HTTPClient_STM32.o"
 "Core/Src/SIM_STM32.o"
 "Core/Src/main.o"
