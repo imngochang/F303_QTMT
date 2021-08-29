@@ -267,7 +267,7 @@ int main(void)
 	HAL_ADCEx_Calibration_Start(&hadc4, ADC_SINGLE_ENDED);
   	HAL_Delay(1000);
   	Flash_init();
-    HAL_UART_Receive_IT(&SIM_UART, Sim_Rxbyte, 1);
+  	HAL_UART_Receive_IT(&SIM_UART, Sim_Rxbyte, 1);
     Sim_resetSIM();
     /* First Connection */
 	char StationStart[25]  = {0};
@@ -1384,26 +1384,28 @@ bool RTC_isLeapYear(uint16_t y)
 
 void Flash_init(void)
 {
+	Flash_Unlock();
 	/* Flash init */
 	if(Flash_ReadIntType(WR_ADDR) == 0xFFFFFFFF)
 	{
-		Flash_WriteIntType(WR_ADDR, WRITE_DATA_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+		Flash_WriteIntType(WR_ADDR, WRITE_DATA_ADDR, FLASH_TYPEPROGRAM_WORD);
 	}
 	if(Flash_ReadIntType(RD_ADDR) == 0xFFFFFFFF)
 	{
-		Flash_WriteIntType(RD_ADDR, READ_DATA_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+		Flash_WriteIntType(RD_ADDR, READ_DATA_ADDR, FLASH_TYPEPROGRAM_WORD);
 	}
 	if(Flash_ReadIntType(PG_ADDR) == 0xFFFFFFFF)
 	{
-		Flash_WriteIntType(PG_ADDR, PAGE_ADDR, FLASH_TYPEPROGRAM_HALFWORD);
+		Flash_WriteIntType(PG_ADDR, PAGE_ADDR, FLASH_TYPEPROGRAM_WORD);
 	}
 	WRITE_DATA_ADDR = Flash_ReadIntType(WR_ADDR);
 	READ_DATA_ADDR = Flash_ReadIntType(RD_ADDR);
 	PAGE_ADDR = Flash_ReadIntType(PG_ADDR);
 	if(Flash_ReadIntType(MODE_RTC_ADDR) == 0xFFFFFFFF)
 	{
-		Flash_WriteIntType(MODE_RTC_ADDR, RTC_ALARM, FLASH_TYPEPROGRAM_HALFWORD);
+		Flash_WriteIntType(MODE_RTC_ADDR, RTC_ALARM, FLASH_TYPEPROGRAM_WORD);
 	}
+	Flash_Lock();
 	RTC_ALARM = Flash_ReadIntType(MODE_RTC_ADDR);
 	RTC_initAlarm(userAlarm.AlarmTime.Hours,userAlarm.AlarmTime.Minutes,0);
 }
