@@ -62,7 +62,7 @@ main-build: KTTV.elf secondary-outputs
 
 # Tool invocations
 KTTV.elf: $(OBJS) $(USER_OBJS) F:\STM32F303\KTTV\STM32F303RCTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "KTTV.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"F:\STM32F303\KTTV\STM32F303RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="KTTV.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "KTTV.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"F:\STM32F303\KTTV\STM32F303RCTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="KTTV.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

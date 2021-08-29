@@ -39,13 +39,13 @@
 /* User define */
 #define STATION 			30
 #define PWRMODE				0
-#define MIN_DATA_ADDR 		0x08011400 //Page 69
-#define MAX_DATA_ADDR 		0x0801F800 //Page 126
-#define MAX_PAGE_ADDR		0x0801FBF0 //End of page 126
-#define MIN_PAGE_ADDR		0x080117F0 //End of page 69
-#define RD_ADDR				0x08011000 //Page 68
-#define WR_ADDR				0x08010C00 //Page 67
-#define PG_ADDR				0x08010800 //Page 66
+/*FLASH*/
+#define MIN_PAGE_ADDR 		0x0800B7F0 //End of page 22
+#define MAX_PAGE_ADDR 		0x0800EFF0 //End of page 30
+#define MIN_DATA_ADDR		0x0800B000 //Page 22
+#define RD_ADDR				0x0800F800 //Page 31
+#define WR_ADDR				0x0800F810 //Page 31
+#define PG_ADDR				0x0800F820 //Page 31
 #define MODE_RTC_ADDR 		0x08010400 //Page 65
 /* ADC */
 #define VOLPOWER 3.30
@@ -389,7 +389,11 @@ int main(void)
 			  strcpy(sensorStatus,"OK");
 		  }
 		  //Tong hop du lieu
-		  strcpy(MainData,"TEST DATA");
+		  sprintf(MainData,"vol=%.1f&sttcode=%s&rssi=%02d&station=%d"
+							"&level=%.2f&rainraw=%d&timestamp=%02d%02d%02d%02d%02d",
+							Voltage,sensorStatus,Sim_RSSI,STATION,levelWater,rainRaw,
+							currentDate.Date,currentDate.Month,currentDate.Year,
+							currentTime.Hours,currentTime.Minutes);
 		  //Reset du lieu
 		  rainRaw = 0;
 		  #if (PWRMODE == 0)
