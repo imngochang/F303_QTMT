@@ -71,12 +71,26 @@ void Error_Handler(void);
 #define SIM_RX_GPIO_Port GPIOA
 #define SIM_TX_Pin GPIO_PIN_3
 #define SIM_TX_GPIO_Port GPIOA
-#define RS485_EN_Pin GPIO_PIN_2
-#define RS485_EN_GPIO_Port GPIOB
 #define RS485_RX_Pin GPIO_PIN_10
 #define RS485_RX_GPIO_Port GPIOB
 #define RS485_TX_Pin GPIO_PIN_11
 #define RS485_TX_GPIO_Port GPIOB
+#define RS485_EN_Pin GPIO_PIN_12
+#define RS485_EN_GPIO_Port GPIOB
+#define ADC_SOLAR_Pin GPIO_PIN_14
+#define ADC_SOLAR_GPIO_Port GPIOB
+#define ADC_VIN_Pin GPIO_PIN_15
+#define ADC_VIN_GPIO_Port GPIOB
+#define CTR_PWR_SS_Pin GPIO_PIN_8
+#define CTR_PWR_SS_GPIO_Port GPIOA
+#define IN_1_Pin GPIO_PIN_11
+#define IN_1_GPIO_Port GPIOC
+#define IN_2_Pin GPIO_PIN_12
+#define IN_2_GPIO_Port GPIOC
+#define IN_3_Pin GPIO_PIN_2
+#define IN_3_GPIO_Port GPIOD
+#define IN_4_Pin GPIO_PIN_3
+#define IN_4_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

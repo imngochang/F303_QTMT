@@ -1,0 +1,5 @@
+RS485.c:6:6:RS485_EnablePin	16	static
+RS485.c:10:10:crcCalculation	32	static
+RS485.c:39:6:RS485_transmit	32	static
+RS485.c:68:6:RS485_ForceSingleCoil	32	static
+RS485.c:85:9:RS485_analysis	32	static
